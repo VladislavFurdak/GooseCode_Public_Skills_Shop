@@ -1,16 +1,20 @@
 ---
 name: nextjs-setup-shadcn
-description: Prevents the four silent failures that make a correctly-installed shadcn/ui project render broken — a self-referencing font token, a font variable mounted below the token that reads it, a fixed sidebar with no content offset, and pages that hardcode Tailwind palette instead of theme tokens. Use right after shadcn init and before building screens, or on an app whose styling looks wrong for no obvious reason. Tailwind v4 + App Router.
+description: Use right after shadcn init, before building screens — or on a Tailwind v4 App Router app that looks wrong for no obvious reason. Fixes six failures a green build misses: serif fallback fonts, content under a fixed sidebar, ignored theme tokens, hydration mismatches, vanishing navigation.
 ParentSkill: shadcn
 ---
 
 # Why shadcn setups render broken
 
-Every failure here is **a contract between two files that nothing verifies**, and
-every one is **silent**: `shadcn init` succeeds, `tsc --noEmit` and `next build`
-pass, the dev server returns 200. The toolchain cannot see any of them. That is
-the whole reason this skill exists — check the contracts explicitly, because
-nothing else will.
+Each failure here is **a contract that nothing verifies** — usually between two
+files, and #1 to #4 are entirely **silent**: `shadcn init` succeeds,
+`tsc --noEmit` and `next build` pass, the dev server returns 200. The toolchain
+cannot see any of them. That is the whole reason this skill exists — check the
+contracts explicitly, because nothing else will.
+
+The last two are not silent, they are *unread*: #5 prints in the browser console
+where a build log never shows it, and #6 only appears once the window is narrow
+enough — a state nobody tests on a 1280px developer screen.
 
 Scaffold with `nextjs-create-app` first; it applies break #1 only.
 
@@ -20,6 +24,8 @@ Scaffold with `nextjs-create-app` first; it applies break #1 only.
 | 2 | `globals.css` ↔ `layout.tsx` | font variable mounted on `<body>`, token computed at `:root` | still Times New Roman after fixing #1 |
 | 3 | sidebar ↔ main | `<aside>` is `fixed`, content reserves no space | content slides under the menu |
 | 4 | theme ↔ pages | pages hardcode `text-gray-900` | theme installed but invisible, dark mode dead |
+| 5 | server HTML ↔ client DOM | extension attributes, `typeof window`, `Date.now()`, bad nesting | console hydration error, subtree re-rendered from scratch |
+| 6 | sidebar ↔ viewport | `hidden lg:flex` with nothing replacing it | below `lg` the navigation is gone, not collapsed |
 
 ## 1 — The font token references itself
 
@@ -129,6 +135,119 @@ the project this came from returned 92 lines across seven files while
 `components/ui` was clean — the exact signature of a theme installed and then
 ignored.
 
+## 5 — Hydration mismatch on `<body>`
+
+```
+A tree hydrated but some attributes of the server rendered HTML didn't match
+the client properties. This won't be patched up.
+
+  <body className="min-h-full flex flex-col"
+-   data-new-gr-c-s-check-loaded="14.1311.0"
+-   data-gr-ext-installed=""
+  >
+```
+
+Read the diff markers before doing anything. `-` on attributes **nobody in the
+codebase wrote** means they arrived after the server rendered: a browser
+extension (these two are Grammarly) edited the DOM before React hydrated. There
+is no bug in the app, and no amount of restructuring will remove them — they come
+from the user's browser, not the build.
+
+That specific class is what `suppressHydrationWarning` is for:
+
+```tsx
+<html lang="en" suppressHydrationWarning>
+  <body className="min-h-full flex flex-col" suppressHydrationWarning>
+```
+
+It applies **one level deep only** — it silences the element it sits on, not the
+tree below. That is precisely why it is safe on `<html>`/`<body>`, where
+extensions inject, and dishonest anywhere else: on a component that genuinely
+mismatches it hides your bug instead of fixing it, and React still discards the
+server HTML for that subtree.
+
+Also put it on `<html>` when a theme provider writes the `.dark` class from
+`localStorage` — the server cannot know the stored preference, so the class
+legitimately differs on the first paint.
+
+**Every other cause in that error message is your bug. Do not suppress those:**
+
+| Cause | Why it mismatches | Fix |
+|---|---|---|
+| `typeof window !== "undefined"` in render | Server takes one branch, client the other | Render the server branch, switch in `useEffect` |
+| `Date.now()`, `Math.random()` | New value on each call | Compute once on the server and pass down, or render after mount |
+| `toLocaleDateString()` with no locale | Server locale/timezone ≠ the user's | Pass an explicit locale **and** `timeZone`, or format client-side |
+| Live external data | Server and client fetch different snapshots | Send the server's snapshot as the initial value |
+| Invalid nesting | The browser silently *moves* nodes, so the DOM stops matching | Fix the markup |
+
+Invalid nesting is the one this stack makes easy. `asChild` merges props onto
+whatever child you pass, so the tag you end up with is not the tag you read:
+
+```tsx
+<p>
+  <Button asChild><div>Save</div></Button>   {/* <div> inside <p> — the browser hoists it out */}
+</p>
+```
+
+`<p>` may not contain block elements, `<a>` may not contain `<a>`, `<button>` may
+not contain `<button>`, and `<tr>` accepts only `<td>`/`<th>`. Each one is
+rearranged by the parser before React sees it, which is why it reads as a
+hydration error rather than a layout bug.
+
+## 6 — The menu vanishes as the window narrows
+
+`hidden lg:flex` on the sidebar is the shadcn/Tailwind default shape, and on its
+own it means that below `lg` the navigation is **gone** — not collapsed, not
+behind a button. Nothing replaces it, so at 1023px the user cannot reach any
+other page of the app.
+
+Losing navigation is not a cosmetic regression; a fixed sidebar with no offset
+(#3) merely overlaps, this removes the only route out of the current screen.
+
+The desktop sidebar must be paired with a narrow-width trigger that opens the
+same links:
+
+```tsx
+{/* desktop: unchanged */}
+<aside className="hidden lg:flex lg:w-64 lg:fixed lg:inset-y-0">
+  <Nav />
+</aside>
+
+{/* below lg: the same Nav, reachable */}
+<Sheet>
+  <SheetTrigger asChild className="lg:hidden">
+    <Button variant="ghost" size="icon" aria-label="Open menu">
+      <MenuIcon />
+    </Button>
+  </SheetTrigger>
+  <SheetContent side="left" className="w-64 p-0">
+    <SheetTitle className="sr-only">Navigation</SheetTitle>
+    <Nav />
+  </SheetContent>
+</Sheet>
+```
+
+Three things that are easy to get wrong here:
+
+- **One `Nav`, rendered twice.** Two copies of the link list drift apart — a route
+  added to one and not the other is invisible until someone opens the app on a
+  phone.
+- **`SheetTitle` is required** even when hidden. Every shadcn overlay needs a
+  title for screen readers; use `sr-only` rather than omitting it.
+- **The breakpoints must agree.** The trigger's `lg:hidden`, the sidebar's
+  `hidden lg:flex` and the content's `lg:pl-64` from #3 are one decision written
+  three times. Change one and you get either two menus at once or none.
+
+Check it by narrowing the window, not by reading the classes:
+
+```bash
+grep -rn "hidden lg:flex\|hidden md:flex" src --include=*.tsx
+```
+
+For each hit, confirm a `Sheet`/`Drawer` trigger exists in the same layout. Then
+open the app at 375px wide and reach every top-level destination. If you cannot,
+the menu is missing however correct the markup looks.
+
 ## Verify
 
 Static — cross-checks `globals.css` against `layout.tsx`, catching #1 and #2. Use
@@ -174,6 +293,33 @@ problems.length ? problems : 'OK';
 
 Check both breakpoints — the offset in #3 is breakpoint-scoped, and mobile must
 show no offset and no horizontal overflow.
+
+Narrow — catches #6, which only exists below the breakpoint. Resize to 375px
+first; at desktop width it always passes.
+
+```js
+const problems = [];
+const aside = document.querySelector('aside');
+const asideHidden = !aside || getComputedStyle(aside).display === 'none';
+// A trigger is anything that opens the nav: shadcn's Sheet marks it with
+// data-slot, a hand-rolled one is a visible button with an aria-label.
+const trigger = document.querySelector(
+  '[data-slot="sheet-trigger"], [data-slot="drawer-trigger"], header button[aria-label*="enu" i]',
+);
+const triggerVisible = !!trigger && getComputedStyle(trigger).display !== 'none';
+if (asideHidden && !triggerVisible)
+  problems.push('navigation is unreachable at this width: sidebar hidden and no menu trigger');
+if (document.documentElement.scrollWidth > window.innerWidth + 1)
+  problems.push(`horizontal overflow: ${document.documentElement.scrollWidth}px in ${window.innerWidth}px`);
+problems.length ? problems : 'OK';
+```
+
+Then open the menu and confirm the links inside are the same set the desktop
+sidebar shows. The check above proves a trigger exists, not that it leads
+anywhere.
+
+The console must also be clean of the hydration error in #5 — it appears on load,
+not on interaction, so read it right after the first paint.
 
 `tsc --noEmit` and `next build` must pass too, but neither detects anything above.
 Never report the setup done on a green build alone.
