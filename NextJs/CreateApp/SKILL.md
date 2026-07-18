@@ -28,6 +28,15 @@ npx create-next-app@latest <app-name> \
   --no-eslint --use-npm --yes
 ```
 
+**Give this command at least 5 minutes** (`timeout_ms: 300000`, or leave it
+unset — that is the default). It downloads a registry's worth of packages, so
+its runtime belongs to the network, not to the machine, and a minute is normal.
+
+Do not shorten it. A scaffold killed mid-install is the worst outcome available
+here: the directory already exists and is half-populated, so the retry fails
+with *"directory contains files that could conflict"* and you are now cleaning
+up instead of building. Observed three times on this exact command at 60s.
+
 Three of these flags are load-bearing for shadcn and must not be dropped:
 
 | Flag | Why shadcn needs it |
@@ -54,6 +63,9 @@ node --version && npx next --version
 ```bash
 npx shadcn@latest init --defaults --yes
 ```
+
+Same rule as the scaffold: **at least 5 minutes**. This step also installs
+dependencies, and it is the second command that gets killed at 60s.
 
 This writes `components.json`, `src/lib/utils.ts`, a first component, and rewrites
 `src/app/globals.css` with the theme variables.

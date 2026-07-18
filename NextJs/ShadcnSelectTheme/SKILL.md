@@ -104,6 +104,12 @@ together — run the command, then immediately add the import to `layout.tsx`:
 | Neon Forest | `npx shadcn@latest add @shadcndesign/theme-neon-forest --yes` | `import { Inter } from "next/font/google"` |
 | Icecream | `npx shadcn@latest add @shadcndesign/theme-icecream --yes` | `import { Instrument_Sans } from "next/font/google"` |
 
+Each `shadcn add` above fetches from a registry and installs dependencies —
+**give it at least 5 minutes** (`timeout_ms: 300000`, or leave it unset for the
+default). A theme killed mid-install leaves `globals.css` half-rewritten, which
+looks exactly like the theme "not applying" and sends you debugging the wrong
+thing.
+
 All twelve families are on Google Fonts (verified), and `next/font/google` names
 them with underscores for spaces. The catalogue `next/font` ships is a snapshot
 taken at each Next.js release, so a recently-added family may be missing from an
