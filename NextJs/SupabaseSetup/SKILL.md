@@ -1,19 +1,26 @@
 ---
 name: supabase-setup
-description: Use before writing any data layer on a Next.js app that needs persistence. Sets up Supabase with the supabase-js client — local stack for development, schema through migration files, generated types, and how to deploy those migrations to a hosted project. No ORM. Start local; a hosted project needs an account only the user can create.
+description: Use before writing any data layer or auth on a Next.js App Router app. Sets up Supabase with @supabase/ssr — the Next.js client: browser client, server client and session middleware, plus the local Docker stack, SQL migrations, generated types and how to deploy those migrations to a hosted project. No ORM. A plain supabase-js createClient is the wrong client here and breaks auth across the server/client boundary. Start local; a hosted project needs an account only the user can create.
 ---
 
-# Supabase
+# Supabase on the Next.js App Router
 
-**Develop against the local stack. Deploy to a hosted project.**
+Two decisions shape everything below.
 
-Local Supabase is the full stack — Postgres, PostgREST, Auth, Storage, Studio —
-running in Docker with no account, no browser and no keys to ask anyone for. It
-is what makes this data layer buildable in one uninterrupted run. A hosted
-project is the deployment target, and creating one is the user's job, not yours.
+**Use `@supabase/ssr`, not a plain `supabase-js` client.** On the App Router a
+request is handled in three different places — browser, server, middleware — and
+the session lives in cookies. One shared `createClient()` cannot reach those
+cookies from all three, so auth appears to work in the browser and the user is
+anonymous in every server component. `@supabase/ssr` is the Next.js client;
+`supabase-js` comes along as its dependency and is not what you construct.
 
-Nothing here compiles native code: `@supabase/supabase-js` installs in 5 s and
-pulls 4 packages.
+**Develop against the local stack, deploy to a hosted project.** Local Supabase
+is the full thing — Postgres, PostgREST, Auth, Storage, Studio — running in
+Docker with no account, no browser and no keys to ask anyone for. That is what
+makes this buildable in one uninterrupted run. Creating the hosted project is the
+user's job, not yours (§7).
+
+Nothing here compiles native code.
 
 ## 1 — Install
 
