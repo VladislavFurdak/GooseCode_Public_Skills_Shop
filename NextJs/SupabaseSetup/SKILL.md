@@ -1,6 +1,6 @@
 ---
 name: supabase-setup
-description: Use before writing any data layer or auth on a Next.js App Router app. Sets up Supabase with @supabase/ssr — the Next.js client: browser client, server client and session middleware, plus the local Docker stack, SQL migrations, generated types and how to deploy those migrations to a hosted project. No ORM. A plain supabase-js createClient is the wrong client here and breaks auth across the server/client boundary. Start local; a hosted project needs an account only the user can create.
+description: Use before writing any data layer or auth on a Next.js App Router app. Sets up Supabase with @supabase/ssr, the Next.js client — browser client, server client and session middleware, plus the local Docker stack, SQL migrations, generated types and how to deploy those migrations to a hosted project. No ORM. A plain supabase-js createClient is the wrong client here and breaks auth across the server/client boundary. Start local; a hosted project needs an account only the user can create.
 ---
 
 # Supabase on the Next.js App Router

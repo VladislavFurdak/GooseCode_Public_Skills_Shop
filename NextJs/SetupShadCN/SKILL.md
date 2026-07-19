@@ -1,6 +1,6 @@
 ---
 name: nextjs-setup-shadcn
-description: Use right after shadcn init, before building screens — or on a Tailwind v4 App Router app that looks wrong for no obvious reason. Fixes six failures a green build misses: serif fallback fonts, content under a fixed sidebar, ignored theme tokens, hydration mismatches, vanishing navigation.
+description: Use right after shadcn init, before building screens — or on a Tailwind v4 App Router app that looks wrong for no obvious reason. Fixes six failures a green build misses — serif fallback fonts, content under a fixed sidebar, ignored theme tokens, hydration mismatches, vanishing navigation.
 ParentSkill: shadcn
 ---
 
