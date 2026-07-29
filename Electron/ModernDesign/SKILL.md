@@ -20,6 +20,17 @@ screens to tokens with the same grep audit. shadcn/ui itself works in Electron
 renderers — it is just React + Tailwind; if the app wants that look, follow
 `NextJs/SetupShadCN`'s contracts, minus the Next-specific hydration items.
 
+**Tailwind's on-switch is the CSS entry file — and forgetting it fails
+silently.** The entry the renderer imports must contain `@import "tailwindcss";`
+(v4) or the three `@tailwind base/components/utilities;` directives (v3
+projects; v3 directives inside a v4 pipeline also no-op). Miss it — or point
+v3 `content` globs away from `src/renderer/**` — and the build still
+succeeds: custom properties and resets load, **zero utility classes** are
+generated, and the app renders as unstyled HTML while everyone debugs the
+React components (which are fine). The tell is output size: a utilities-bearing
+build emits tens of KB of CSS; a file under ~2 KB means Tailwind never ran.
+`grep -c "flex\|rounded" out/renderer/assets/*.css` returning 0 confirms it.
+
 Density is the desktop difference: base font 13–14px (not 16), 32px control
 heights (not 44px web-mobile buttons), tighter spacing scale. A desktop tool
 drawn at marketing-site scale reads as a toy.
@@ -162,6 +173,9 @@ shortcuts show up in the menus themselves, which is how users discover them.
    custom titlebar: window moves; click each titlebar button: it does its job
    and does not drag.
 6. Tab through a screen: focus rings appear; click the same controls: none.
+7. The built renderer CSS actually contains utilities: the asset is tens of
+   KB and `grep -c "flex\|rounded" out/renderer/assets/*.css` is non-zero —
+   ~1 KB of CSS means the Tailwind entry import/directives are missing (§1).
 
 ## Notes
 

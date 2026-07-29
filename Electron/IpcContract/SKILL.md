@@ -148,6 +148,36 @@ Conventions that keep this maintainable:
   — not sprinkled through modules — so the handler list and the channel map
   stay reviewable side by side.
 
+### Schemas describe what the code produces — not what it "should" produce
+
+The classic silent killer, from a real debugging session: the store generates
+IDs like `todo-${counter}-${Date.now().toString(36)}`, but the handler
+validates `z.string().uuid()` because "IDs should be UUIDs" — so **every**
+call on that channel rejects at the boundary. TypeScript is silent (`string`
+is assignable to `string` regardless of runtime format), the renderer's
+`await` surfaces nothing or the opaque remote-method string, and the UI just
+does nothing. Types check *shape*; only runtime validation checks *values* —
+and it must be written against reality:
+
+- Write the value producer first, decide the format, then write the schema to
+  match. Custom formats get `z.string().min(1)` or `z.string().regex(/^todo-/)`
+  — reach for `.uuid()` / `.email()` / `.datetime()` only when the producer
+  really emits that format.
+- Log validation failures in main before rethrowing, otherwise the *why*
+  never surfaces anywhere:
+
+```ts
+const parsed = TodoId.safeParse(raw);
+if (!parsed.success) {
+  console.error(`[ipc] ${IPC.todosToggle} rejected:`, parsed.error.flatten());
+  throw parsed.error;                  // still rejects — but main's console says why
+}
+```
+
+- After writing schemas, run one cross-check pass: for every format assertion
+  in the schema file, read the code that produces that value and confirm they
+  agree. Five minutes, and it catches the whole bug class.
+
 ## 4. Payload rules learned in production
 
 - **Validate paths against a root.** Any renderer-supplied file path gets
@@ -178,6 +208,9 @@ Conventions that keep this maintainable:
    reject) — proves validation is on.
 4. Mount/unmount a component subscribed to an event five times, fire the
    event once: the listener runs once (unsubscribes work).
+5. Round-trip every channel once from the console with a payload the app
+   *actually produces* (an ID copied from real state, not an invented UUID) —
+   `tsc` cannot catch schema-vs-reality format mismatches; this does.
 
 ## Notes
 
